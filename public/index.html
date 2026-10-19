@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ProtestGuard Albania - Rrjeti i Sigurisë Qytetare</title>
+  <!-- PWA Manifest & Mobile Web App Meta -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#121417">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ProtestGuard">
+  <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <!-- Leaflet CSS for Map (Self-hosted Open-Source) -->
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+  <style>
+    :root {
+      --bg-dark: #121417;
+      --card-bg: #1e2229;
+      --card-border: #2e3540;
+      --primary-red: #e63946;
+      --warning-orange: #f77f00;
+      --medic-cyan: #06d6a0;
+      --legal-blue: #4cc9f0;
+      --text-main: #f8f9fa;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Status Bar */
+    header {
+      background-color: var(--card-bg);
+      border-bottom: 1px solid var(--card-border);
+      padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1000;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text-main);
+    }
+
+    .brand span {
+      color: var(--primary-red);
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(6, 214, 160, 0.15);
+      color: var(--medic-cyan);
+      font-weight: 600;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--medic-cyan);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--medic-cyan);
+    }
+
+    /* Map Area with tactical dark theme */
+    /* Anchors all floating HUD overlays to the map area (not the viewport) */
+    .map-stage {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      background: #111418;
+    }
+
+    /* CSS Dark filter applied to OpenStreetMap tiles for night/tactical view */
+    .tactical-dark-tiles {
+      filter: brightness(0.65) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.35);
+    }
+
+    /* Top Main Tactical Navigation Tabs */
+    .main-nav-tabs {
+      background: #14171d;
+      border-bottom: 2px solid var(--card-border);
+      display: flex;
+      width: 100%;
+      z-index: 1001;
+    }
+
+    .main-nav-tab {
+      flex: 1;
+      padding: 10px 4px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+
+    .main-nav-tab:hover {
+      color: #fff;
+    }
+
+    .main-nav-tab.active-tab {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.04);
+      border-bottom-color: #4361ee;
+    }
+
+    .main-nav-tab.active-protesters-tab {
+      color: #f72585 !important;
+      border-bottom-color: #f72585 !important;
+      background: rgba(247, 37, 133, 0.12) !important;
+    }
+
+    .main-nav-tab.active-police-tab {
+      color: #e63946 !important;
+      border-bottom-color: #e63946 !important;
+      background: rgba(230, 57, 70, 0.12) !important;
+    }
+
+    .main-nav-tab.active-all-tab {
+      color: #4cc9f0 !important;
+      border-bottom-color: #4cc9f0 !important;
+      background: rgba(76, 201, 240, 0.12) !important;
+    }
+
+    /* Floating UI Controls */
+    .floating-top-bar {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      right: 60px;
+      z-index: 999;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .floating-top-bar > * {
+      pointer-events: auto;
+    }
+
+    .info-pill {
+      background: rgba(30, 34, 41, 0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--card-border);
+      padding: 6px 10px;
+      border-radius: 16px;
+      font-size: 0.78rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+
+    /* Mode View Selector (Presets) */
+    .view-modes-container {
+      position: absolute;
+      top: 60px;
+      right: 12px;
+      z-index: 1000;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      max-width: calc(100vw - 220px);
+    }
+
+    .view-modes-container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .view-mode-btn {
+      background: rgba(20, 23, 29, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      border-radius: 10px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    }
+
+    .view-mode-btn:hover {
+      color: #fff;
+    }
+
+    .view-mode-btn.active {
+      background: #4361ee;
+      border-color: #4cc9f0;
+      color: #fff;
+      box-shadow: 0 0 10px rgba(67, 97, 238, 0.5);
+    }
+
+    .view-mode-btn.active-police {
+      background: #e63946 !important;
+      border-color: #ff4d6d !important;
+      color: #fff !important;
+      box-shadow: 0 0 12px rgba(230, 57, 70, 0.6) !important;
+    }
+
+    .view-mode-btn.active-protesters {
+      background: #7209b7 !important;
+      border-color: #b5179e !important;
+      color: #fff !important;
+      box-shadow: 0 0 12px rgba(114, 9, 183, 0.6) !important;
+    }
+
+
+
+    /* Floating Action Buttons */
+    .tactical-controls {
+      position: absolute;
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+      left: 12px;
+      right: 12px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .tactical-controls > * {
+      pointer-events: auto;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-sos {
+      background: linear-gradient(135deg, #e63946, #b7094c);
+      color: white;
+      font-size: 1.1rem;
+      padding: 16px;
+      border: 2px solid #ff4d6d;
+      letter-spacing: 0.5px;
+      animation: pulse-sos 2s infinite;
+    }
+
+    @keyframes pulse-sos {
+      0% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.7); }
+      70% { box-shadow: 0 0 0 15px rgba(230, 57, 70, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0); }
+    }
+
+    .btn-report {
+      background: var(--warning-orange);
+      color: #fff;
+      flex: 1;
+    }
+
+    .btn-buddy {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      flex: 1;
+    }
+
+    .btn-organizer {
+      background: linear-gradient(135deg, #4361ee, #3f37c9);
+      color: #fff;
+      flex: 1;
+    }
+
+    .btn-role {
+      background: linear-gradient(135deg, #7209b7, #560bad);
+      color: #fff;
+      border: 1px solid #b5179e;
+      flex: 1;
+    }
+
+    .btn-scout {
+      background: linear-gradient(135deg, #f77f00, #d62828);
+      color: #fff;
+      flex: 1;
+    }
+
+    .intel-banner {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      right: 12px;
+      background: rgba(214, 40, 40, 0.95);
+      border: 1px solid #ff4d6d;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: white;
+      z-index: 1650;
+      display: none;
+      box-shadow: 0 8px 24px rgba(230, 57, 70, 0.55);
+      animation: shake 0.4s ease;
+    }
+
+    .directive-banner {
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      right: 12px;
+      background: rgba(67, 97, 238, 0.95);
+      border: 1px solid #4cc9f0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: white;
+      z-index: 1600;
+      display: none;
+      box-shadow: 0 8px 24px rgba(67, 97, 238, 0.4);
+    }
+
+    .buddy-tag {
+      background: rgba(6, 214, 160, 0.9);
+      color: #0b132b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      white-space: nowrap;
+      display: inline-block;
+      margin-top: 2px;
+    }
+
+    /* Map Layer Filters / Overlays HUD */
+    .layers-bar {
+      position: absolute;
+      top: 48px;
+      left: 8px;
+      right: 8px;
+      z-index: 998;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 4px 6px 6px 2px;
+      pointer-events: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .layers-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .layer-chip {
+      background: rgba(20, 23, 29, 0.88);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 5px 10px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .layer-chip.active {
+      background: rgba(67, 97, 238, 0.25);
+      border-color: #4361ee;
+      color: #fff;
+    }
+
+    .layer-chip.active-danger {
+      background: rgba(230, 57, 70, 0.25);
+      border-color: #e63946;
+      color: #ff4d6d;
+    }
+
+    .layer-chip.active-purple {
+      background: rgba(181, 23, 158, 0.25);
+      border-color: #b5179e;
+      color: #f72585;
+    }
+
+    .layer-chip.active-blue {
+      background: rgba(76, 201, 240, 0.25);
+      border-color: #4cc9f0;
+      color: #4cc9f0;
+    }
+
+    .pulse-vanguard {
+      animation: pulse-red-beacon 1.4s infinite;
+    }
+
+    @keyframes pulse-red-beacon {
+      0% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0.8); }
+      70% { box-shadow: 0 0 0 12px rgba(230, 57, 70, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(230, 57, 70, 0); }
+    }
+
+    /* Modal / Bottom Sheets */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border-top: 1px solid var(--card-border);
+      width: 100%;
+      max-width: 500px;
+      border-radius: 20px 20px 0 0;
+      padding: 20px;
+      max-height: 85vh;
+      overflow-y: auto;
+      animation: slideUp 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-control, select {
+      width: 100%;
+      padding: 12px;
+      background: #14171d;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-size: 0.95rem;
+    }
+
+    .form-control:focus, select:focus {
+      outline: none;
+      border-color: var(--legal-blue);
+    }
+
+    /* Proximity Alert Banner */
+    .proximity-banner {
+      position: absolute;
+      top: 88px;
+      left: 12px;
+      right: 12px;
+      background: rgba(230, 57, 70, 0.95);
+      border: 1px solid #ff4d6d;
+      border-radius: 12px;
+      padding: 14px;
+      color: white;
+      z-index: 1500;
+      display: none;
+      box-shadow: 0 8px 24px rgba(230, 57, 70, 0.5);
+      animation: shake 0.5s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+
+    .sos-banner {
+      position: absolute;
+      top: 160px;
+      left: 12px;
+      right: 12px;
+      background: #7209b7;
+      border: 1px solid #b5179e;
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: white;
+      z-index: 1400;
+      display: none;
+    }
+
+    /* ---- Bisedat e Grupeve (Group Chats) ---- */
+    .btn-chat {
+      background: linear-gradient(135deg, #06d6a0, #118ab2);
+      color: #fff;
+      flex: 1;
+    }
+
+    #modal-chat .modal-content {
+      max-width: 560px;
+      display: flex;
+      flex-direction: column;
+      height: 88vh;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      background: #121417;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+      min-height: 180px;
+    }
+
+    .chat-bubble {
+      max-width: 82%;
+      padding: 8px 12px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      line-height: 1.35;
+      word-wrap: break-word;
+    }
+
+    .chat-bubble--mine {
+      align-self: flex-end;
+      background: #4361ee;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-bubble--other {
+      align-self: flex-start;
+      background: #1e2229;
+      border: 1px solid #2e3540;
+      color: var(--text-main);
+      border-bottom-left-radius: 4px;
+    }
+
+    .chat-bubble--organizer {
+      align-self: flex-start;
+      background: rgba(6, 214, 160, 0.15);
+      border: 1px solid #06d6a0;
+      color: #eafff7;
+      border-bottom-left-radius: 4px;
+    }
+
+    .chat-bubble-author {
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 2px;
+      opacity: 0.9;
+    }
+
+    .chat-bubble-time {
+      font-size: 0.65rem;
+      opacity: 0.7;
+      margin-top: 3px;
+      text-align: right;
+    }
+
+    .chat-room-item {
+      background: #14171d;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+
+    .chat-room-item:hover {
+      border-color: #06d6a0;
+    }
+
+    .chat-room-item.active {
+      border-color: #06d6a0;
+      background: rgba(6, 214, 160, 0.08);
+    }
+
+    .chat-composer {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-composer input {
+      flex: 1;
+    }
+
+    .chat-members-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 6px 0 10px;
+    }
+
+    .chat-member-chip {
+      background: rgba(76, 201, 240, 0.12);
+      border: 1px solid rgba(76, 201, 240, 0.4);
+      color: #4cc9f0;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .chat-member-chip--organizer {
+      background: rgba(6, 214, 160, 0.15);
+      border-color: #06d6a0;
+      color: #06d6a0;
+    }
+
+    /* In-app Toast (replaces native alert/confirm/prompt dialogs) */
+    .app-toast {
+      position: fixed;
+      bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      max-width: min(90vw, 420px);
+      background: rgba(30, 34, 41, 0.96);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      white-space: pre-line;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 3000;
+    }
+    .app-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .app-toast--error { border-color: #ff4d6d; color: #ff8fa3; }
+    .app-toast--success { border-color: #06d6a0; color: #7bf1d5; }
+    .app-toast--info { border-color: #4cc9f0; color: #cdeefd; }
+
+    /* Kutia e Njoftimeve (Notification Center Inbox) */
+    .inbox-item {
+      background: #14171d;
+      border: 1px solid var(--card-border);
+      border-left: 4px solid var(--legal-blue);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      transition: all 0.2s ease;
+    }
+    .inbox-item--sos {
+      border-left-color: #e63946;
+      background: rgba(230, 57, 70, 0.08);
+    }
+    .inbox-item--scout {
+      border-left-color: #f77f00;
+      background: rgba(247, 127, 0, 0.08);
+    }
+    .inbox-item--directive {
+      border-left-color: #4361ee;
+      background: rgba(67, 97, 238, 0.08);
+    }
+    .inbox-item--proximity {
+      border-left-color: #ff4d6d;
+      background: rgba(255, 77, 109, 0.08);
+    }
+    .inbox-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .inbox-badge {
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .inbox-badge--sos { background: #e63946; color: #fff; }
+    .inbox-badge--scout { background: #f77f00; color: #fff; }
+    .inbox-badge--directive { background: #4361ee; color: #fff; }
+    .inbox-badge--proximity { background: #ff4d6d; color: #fff; }
+
+    /* In-app SOS confirmation modal */
+    #modal-sos .sos-note-input {
+      width: 100%;
+      padding: 12px;
+      background: #14171d;
+      border: 1px solid #ff4d6d;
+      border-radius: 10px;
+      color: var(--text-main);
+      font-size: 0.95rem;
+      margin: 10px 0;
+    }
+    #modal-sos .sos-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    #modal-sos .sos-actions .btn { flex: 1; }
+
+    /* Mobile layout refinements */
+    @media (max-width: 480px) {
+      header {
+        padding: calc(6px + env(safe-area-inset-top, 0px)) 8px 6px;
+        gap: 4px;
+        flex-wrap: nowrap;
+        overflow: hidden;
+      }
+      .brand {
+        font-size: 0.88rem;
+        gap: 4px;
+        white-space: nowrap;
+      }
+      header button {
+        padding: 4px 6px !important;
+        font-size: 0.68rem !important;
+        white-space: nowrap;
+      }
+      .badge-status {
+        padding: 3px 6px;
+        font-size: 0.65rem;
+      }
+      .badge-status span {
+        display: none;
+      }
+
+      .main-nav-tab {
+        font-size: 0.72rem;
+        padding: 8px 2px;
+        letter-spacing: 0;
+        gap: 2px;
+      }
+
+      .floating-top-bar {
+        top: 6px;
+        left: 6px;
+        right: 6px;
+        gap: 4px;
+      }
+
+      .info-pill {
+        font-size: 0.68rem;
+        padding: 4px 7px;
+        white-space: nowrap;
+      }
+
+      .layers-bar {
+        top: 36px;
+        left: 4px;
+        right: 4px;
+        padding: 2px 4px 6px 2px;
+        gap: 4px;
+      }
+
+      .layer-chip {
+        font-size: 0.68rem;
+        padding: 4px 7px;
+        border-radius: 12px;
+      }
+
+      .tactical-controls {
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        left: 6px;
+        right: 6px;
+        gap: 6px;
+      }
+
+      .action-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+      }
+      .btn {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+        border-radius: 10px;
+        flex-direction: column;
+        gap: 2px;
+        line-height: 1.15;
+        text-align: center;
+      }
+      .btn-sos {
+        font-size: 0.88rem;
+        padding: 10px 8px;
+        letter-spacing: 0.2px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header>
+    <div class="brand">
+      🛡️ Protest<span>Guard</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button id="btn-sound-alarm" style="background:#2b2d42;border:1px solid #ff4d6d;color:#ff4d6d;border-radius:8px;padding:5px 9px;font-size:0.75rem;cursor:pointer;font-weight:700;" title="Aktivizo Megafon / Sirenë Akustike në Terren">📢 Sirenë</button>
+      <button id="btn-safe-route" style="background:#14213d;border:1px solid #06d6a0;color:#06d6a0;border-radius:8px;padding:5px 9px;font-size:0.75rem;cursor:pointer;font-weight:700;" title="Gjej Korridorin më të Afërt të Sigurt & Spital">🧭 Korridor</button>
+      <button id="btn-open-inbox" style="position:relative;background:#1b263b;border:1px solid #4cc9f0;color:#4cc9f0;border-radius:8px;padding:5px 9px;font-size:0.75rem;cursor:pointer;font-weight:700;" title="Kutia e Njoftimeve & Alarmeve">
+        🔔 Njoftime <span id="inbox-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#e63946;color:#fff;border-radius:10px;padding:1px 5px;font-size:0.65rem;font-weight:800;border:1px solid #fff;">0</span>
+      </button>
+      <button id="btn-open-admin" style="background:#2e3540;border:1px solid #4361ee;color:#4cc9f0;border-radius:8px;padding:5px 9px;font-size:0.75rem;cursor:pointer;font-weight:600;">👑 Admin</button>
+      <div class="badge-status">
+        <div class="pulse-dot"></div>
+        <span id="network-status">Rrjeti Aktiv</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- KRYE-TABET KRYESORE TAKTIKE (EKSKLUZIVE: TË GJITHA | PROTESTUESIT | POLICIA | SHOKËT) -->
+  <nav class="main-nav-tabs">
+    <button class="main-nav-tab active-all-tab" id="nav-tab-all" data-mode="all">
+      🌐 Të Gjitha
+    </button>
+    <button class="main-nav-tab" id="nav-tab-protesters" data-mode="protesters">
+      🔥 Protestuesit
+    </button>
+    <button class="main-nav-tab" id="nav-tab-police" data-mode="police">
+      👮 Policia
+    </button>
+    <button class="main-nav-tab" id="nav-tab-buddies" data-mode="buddies">
+      👥 Shokët
+    </button>
+  </nav>
+
+  <!-- Interactive Map Container (anchors floating HUD overlays) -->
+  <div class="map-stage">
+    <div id="map"></div>
+
+  <!-- Top Info HUD & Auto-Fokus Control -->
+  <div class="floating-top-bar">
+    <div style="display:flex;gap:6px;">
+      <div class="info-pill" id="hud-role">
+        🏷️ Roli: <strong>Civil</strong>
+      </div>
+      <div class="info-pill" id="hud-buddy">
+        👥 Shokë: <strong>0 në grup</strong>
+      </div>
+    </div>
+    <div>
+      <button class="info-pill active" id="btn-toggle-autofocus" style="cursor:pointer;color:#4cc9f0;border-color:#4361ee;background:rgba(20,23,29,0.95);font-weight:700;">
+        🎯 Auto-Fokus: ON
+      </button>
+    </div>
+  </div>
+
+  <!-- Tactical Map Layers Filter HUD (Çelësat e Çdo Shtrese) -->
+  <div class="layers-bar">
+    <div class="layer-chip active-blue" id="layer-buddies" data-layer="buddies">
+      👥 Shokët e Qelizës
+    </div>
+    <div class="layer-chip active-purple" id="layer-crowd" data-layer="crowd">
+      🔥 Masa e Protestuesve
+    </div>
+    <div class="layer-chip active-danger" id="layer-police" data-layer="police">
+      👮 Policia & Kordonët
+    </div>
+    <div class="layer-chip active-danger" id="layer-pins" data-layer="pins">
+      ⚠️ Raportimet e Rrezikut
+    </div>
+    <div class="layer-chip active" id="layer-institutions" data-layer="institutions">
+      🏛️ Institucionet Shtetërore
+    </div>
+    <div class="layer-chip active-green" id="layer-hospitals" data-layer="hospitals">
+      🏥 Spitalet & Ndihma
+    </div>
+    <div class="layer-chip active-danger" id="layer-vanguard" data-layer="vanguard">
+      ⚡ Fronti Ballor (Të Rinjtë)
+    </div>
+    <div class="layer-chip active-danger" id="layer-intel" data-layer="intel">
+      🔭 Njoftimet e Informatorëve
+    </div>
+  </div>
+
+  <!-- (Banners removed: all alerts now go cleanly to the Notification Inbox / Toast to keep map clear) -->
+
+  <!-- Tactical Bottom Action Buttons -->
+  <div class="tactical-controls">
+    <!-- Big SOS Button -->
+    <button class="btn btn-sos" id="btn-trigger-sos">
+      🚨 BUTONI SOS / NDALIM ME FORCË
+    </button>
+
+    <div class="action-row">
+      <button class="btn btn-report" id="btn-open-report">
+        ⚠️ Raporto Rrezik
+      </button>
+      <button class="btn btn-scout" id="btn-open-scout">
+        🔭 Njofto Lëvizje
+      </button>
+      <button class="btn btn-buddy" id="btn-open-buddy">
+        👥 Qeliza
+      </button>
+      <button class="btn btn-chat" id="btn-open-chat">
+        💬 Bisedat
+      </button>
+      <button class="btn btn-organizer" id="btn-open-organizer">
+        📢 Urdhrat
+      </button>
+      <button class="btn btn-role" id="btn-open-profile">
+        🎓 Roli
+      </button>
+    </div>
+  </div>
+  </div>
+
+  <!-- MODAL: Raportim Rreziku / Policie -->
+  <div class="modal-overlay" id="modal-report">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>⚠️ Raporto Rrezik në Terren</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Lloji i Incidentit</label>
+        <select id="report-type" class="form-control">
+          <option value="police_cordon">👮 Kordon Policie / Bllokadë</option>
+          <option value="plainclothes_police">🕵️ Polici me Rroba Civile (Infiltrues)</option>
+          <option value="teargas">💨 Gaz Lotsjellës / Spray Piper</option>
+          <option value="water_cannon">🚛 Autoblindë / Ujëhedhëse</option>
+          <option value="blocked_street">🚧 Rrugë e Mbyllur / Chokepoint</option>
+          <option value="medic_needed">🩺 Nevojitet Mjek / Ndihmë e Shpejtë</option>
+          <option value="lawyer_needed">⚖️ Nevojitet Jurist / Dëshmitar</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Përshkrim i Shkurtër (ose zgjidh rrugën më poshtë)</label>
+        <input type="text" id="report-desc" class="form-control" placeholder="Përshkruaj vendndodhjen..." maxlength="120" list="tirana-streets-list" autocomplete="off">
+      </div>
+      <button class="btn btn-report" style="width: 100%;" id="btn-submit-report">
+        Dërgo Pin në Hartë
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: Buddy Group (Qeliza e Shokëve) -->
+  <div class="modal-overlay" id="modal-buddy">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>👥 Qeliza e Shokëve (Buddy Circle)</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Zbatoni rregullin taktik: <strong>Mos ec kurrë i vetëm</strong>. Krijoni ose bashkohuni në një qelizë prej 3-5 miqsh për të ndjekur njëri-tjetrin në çdo hap.
+      </p>
+
+      <!-- Paneli i Grupit Aktiv (kur je brenda një qelize) -->
+      <div id="buddy-active-box" style="display:none;background:#14171d;border:1px solid #06d6a0;border-radius:12px;padding:12px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.8rem;color:#06d6a0;font-weight:700;">✅ JE I LIDHUR NË QELIZË</span>
+          <button id="btn-leave-buddy" style="background:transparent;border:none;color:#ff4d6d;font-size:0.75rem;cursor:pointer;text-decoration:underline;">Dil nga Grupi</button>
+        </div>
+        <div style="font-size:0.95rem;font-weight:800;color:#fff;" id="buddy-current-name">Grupi Im</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;background:#1e2229;padding:8px 10px;border-radius:8px;">
+          <div style="flex:1;font-family:monospace;font-size:0.85rem;color:#4cc9f0;word-break:break-all;" id="buddy-current-id">ID: -</div>
+          <button class="btn btn-buddy" id="btn-copy-buddy-id" style="padding:6px 10px;font-size:0.75rem;flex:none;">📋 Kopjo ID</button>
+        </div>
+      </div>
+
+      <div style="border-bottom: 1px solid var(--card-border); padding-bottom: 12px; margin-bottom: 12px;">
+        <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 8px;">Krijo Qelizë të Re</div>
+        <div class="form-group">
+          <input type="text" id="buddy-group-name" class="form-control" placeholder="Emri i Qelizës (p.sh. Fakulteti Mjekësi)">
+        </div>
+        <div class="form-group">
+          <input type="text" id="buddy-passcode" class="form-control" placeholder="PIN Kodi Sekret (p.sh. 4321)">
+        </div>
+        <button class="btn btn-buddy" style="width: 100%;" id="btn-create-buddy">Krijo Grupin</button>
+      </div>
+
+      <div>
+        <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 8px;">Bashkohu në një Qelizë Ekzistuese</div>
+        <div class="form-group">
+          <input type="text" id="join-group-id" class="form-control" placeholder="ID e Grupit (p.sh. bg_x89a)">
+        </div>
+        <div class="form-group">
+          <input type="text" id="join-group-pin" class="form-control" placeholder="PIN Kodi Sekret">
+        </div>
+        <button class="btn btn-buddy" style="width: 100%;" id="btn-join-buddy">Bashkohu në Qelizë</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Zgjedhja e Rolit & Kutia e Sigurisë (Emergency Vault) -->
+  <div class="modal-overlay" id="modal-profile">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>🎓 Roli, Pseudonimi & Siguria</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pseudonimi / Emri në Qelizë (që shokët të të njohin)</label>
+        <input type="text" id="user-nickname" class="form-control" placeholder="p.sh. Joni, Arbi, Mira..." maxlength="24">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Roli Juaj në Protestë</label>
+        <select id="select-role" class="form-control">
+          <option value="civilian">📣 Protestues / Qytetar</option>
+          <option value="scout">🔭 Informator / Vëzhgues Lëvizjeje (Scout)</option>
+          <option value="frontline">🛡️ Fronti i Parë (Mburojë Paqësore / Vija e Parë)</option>
+          <option value="vanguard">⚡ Fronti Ballor / Të Rinjtë (Grupi me Rrezik të Lartë)</option>
+          <option value="medic">🩺 Mjek / Infermier / Student Mjekësie</option>
+          <option value="legal">⚖️ Jurist / Avokat / Student Drejtësie</option>
+          <option value="logistics">🎒 Ndihmë Logjistike (Ujë, Maska, Ndihmë)</option>
+          <option value="organizer">📢 Organizator / Drejtues Marshi</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;background:#14171d;padding:10px;border-radius:10px;border:1px solid #e63946;">
+        <input type="checkbox" id="check-minor" style="width:20px;height:20px;">
+        <label for="check-minor" style="font-size:0.85rem;cursor:pointer;">
+          <strong style="color:#ff4d6d;">⚠️ Statusi: Nën 18 vjeç / I Ri në Vijën e Parë</strong><br>
+          <span style="color:var(--text-muted);font-size:0.75rem;">
+            Aktivizon mbrojtje prioritare! Juristët dhe mjekët do t'ju kenë në qendër të vëmendjes për monitorim kundër dhunës së tejskajshme.
+          </span>
+        </label>
+      </div>
+
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;background:#14171d;padding:10px;border-radius:10px;border:1px solid var(--card-border);">
+        <input type="checkbox" id="check-frontline" style="width:20px;height:20px;">
+        <label for="check-frontline" style="font-size:0.85rem;cursor:pointer;">
+          <strong>🛡️ Pozicionohu në Frontin e Parë</strong><br>
+          <span style="color:var(--text-muted);font-size:0.75rem;">Merr përsipër të jesh në rreshtat ballorë për koordinim taktik.</span>
+        </label>
+      </div>
+
+      <div class="form-group" id="group-organizer-code" style="display: none;">
+        <label class="form-label" style="color: #4cc9f0;">Kodi i Sigurisë së Organizatorit</label>
+        <input type="password" id="organizer-code" class="form-control" placeholder="Kodi i autorizimit (LIRI2026)">
+        <span style="font-size:0.72rem;color:var(--text-muted);display:block;margin-top:3px;">
+          *Kodi i paracaktuar i organizatorëve: <strong>LIRI2026</strong>
+        </span>
+      </div>
+
+      <div style="margin-top: 16px; border-top: 1px solid var(--card-border); padding-top: 12px;">
+        <div style="font-weight: 700; color: #ffb703; font-size: 0.95rem; margin-bottom: 4px;">
+          🔒 Kutia e Besuar e Familjes (Emergency Vault)
+        </div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">
+          Në rast arrestimi ose marrje me forcë, këto të dhëna njoftohen menjëherë me koordinatat tuaja të fundit.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Emri i Familjarit / Avokatit</label>
+          <input type="text" id="vault-contact-name" class="form-control" placeholder="p.sh. Babai / Av. Ilir">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Numri i Telefonit</label>
+          <input type="text" id="vault-contact-phone" class="form-control" placeholder="+35569XXXXXXX">
+        </div>
+        <button class="btn btn-role" style="width: 100%;" id="btn-save-profile">
+          Ruaj Profilin dhe Kutinë e Sigurisë
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Udhëzuesi i Organizatorëve (Guiding the Protest) -->
+  <div class="modal-overlay" id="modal-organizer">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>📢 Transmetimi i Udhëzimeve Taktike</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Përdoret nga organizatorët dhe drejtuesit e marshimit për të udhëhequr turmën, shmangur rrethimet policore dhe orientuar lëvizjen kolektive.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Veprimi Taktik / Drejtimi</label>
+        <select id="directive-action" class="form-control">
+          <option value="advance">⏩ Marshoni përpara drejt sheshit</option>
+          <option value="hold">⏸️ Qëndroni në vend / Formoni zinxhir paqësor</option>
+          <option value="fallback">↩️ Tërheqje taktike drejt korridorit të sigurt</option>
+          <option value="medical_corridor">🩺 Hapni korridor për ndihmën e shpejtë</option>
+          <option value="peaceful_sit_in">🧘 Uluni në tokë (Rezistencë paqësore)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Titulli i Udhëzimit</label>
+        <input type="text" id="directive-title-input" class="form-control" placeholder="p.sh. Zhvendosje te Bulevardi Dëshmorët e Kombit">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mesazhi i Qartë për Protestuesit</label>
+        <textarea id="directive-msg-input" class="form-control" rows="3" placeholder="Shpjegoni lëvizjen me qetësi... (p.sh. Policia po bllokon rrugën paralele, kaloni nga ura e Lanës)"></textarea>
+      </div>
+      <div class="form-group" id="group-directive-photo" style="background:#14171d;padding:10px;border-radius:10px;border:1px dashed #4cc9f0;">
+        <label class="form-label" style="color:#4cc9f0;font-weight:700;">
+          📷 KUSHTI I SIGURISË: Foto Dëshmi nga Terreni (E DETYRUESHME për Marsh Para / Tërheqje)
+        </label>
+        <input type="file" id="directive-photo-input" accept="image/*" class="form-control" style="padding:6px;">
+        <div id="photo-preview-container" style="display:none;margin-top:8px;">
+          <img id="photo-preview-img" src="" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--card-border);">
+        </div>
+        <span style="font-size:0.75rem;color:var(--text-muted);display:block;margin-top:4px;">
+          *Për të evituar sabotimet dhe urdhrat e rremë, asnjë komandë lëvizjeje nuk transmetohet pa foto autentike nga terreni!
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Prioriteti</label>
+        <select id="directive-priority" class="form-control">
+          <option value="normal">Normal</option>
+          <option value="urgent">Urgjent</option>
+          <option value="critical">Kritik (Alarmo të gjithë)</option>
+        </select>
+      </div>
+      <button class="btn btn-organizer" style="width: 100%;" id="btn-send-directive">
+        📢 Transmeto Udhëzimin te të Gjithë
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: Njoftimi i Informatorëve / Vëzhguesve (Field Scout Movement Dispatch) -->
+  <div class="modal-overlay" id="modal-scout">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>🔭 Njofto Lëvizje të Policisë / Rrethim</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+        Përdoret nga <strong>Vëzhguesit (Informatorët)</strong> për të lajmëruar lëvizjet e papritura të forcave të rendit: drejtimin e furgonëve, rrugët që po bllokohen dhe paralajmërimet për rrethim.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Lloji i Lëvizjes së Vërejtur</label>
+        <select id="scout-movement-type" class="form-control">
+          <option value="police_incoming">🚓 Po vijnë forca policie (drejt turmës)</option>
+          <option value="encirclement_warning">⚠️ PARALAJMËRIM RRETHIMI (Po na rrethojnë, lëvizni!)</option>
+          <option value="water_cannon_moving">🚛 Autoblinda / Ujëhedhëse po lëviz</option>
+          <option value="van_reinforcements">🚐 Përforcime me furgonë / FNSH</option>
+          <option value="exit_blocked">🚧 Rruga / Dalja u bllokua plotësisht</option>
+          <option value="corridor_clear">✅ Korridori është i hapur (Rrugë e lirë për tërheqje)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Rruga / Drejtimi (zgjidh nga lista ose shkruaj)</label>
+        <input type="text" id="scout-street" class="form-control" placeholder="Emri i rrugës ose pika e referimit..." maxlength="80" list="tirana-streets-list" autocomplete="off">
+        <div id="scout-quick-streets" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">
+          <!-- Quick Chips auto-injected by JS -->
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mesazhi i Qartë për Protestuesit</label>
+        <textarea id="scout-text" class="form-control" rows="3" placeholder="Përshkruaj çfarë po sheh: p.sh. Po vijnë 3 furgonë nga krahu i majtë, lëvizni drejt Parkut Rinia!" maxlength="240"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Shkalla e Urgjencës</label>
+        <select id="scout-urgency" class="form-control">
+          <option value="high">🚨 E Lartë (Lëvizje e afërt)</option>
+          <option value="critical">🔴 KRITIKE (Rrethim në sekondë / Evakuim)</option>
+          <option value="normal">ℹ️ Informuese (Vëzhgim në distancë)</option>
+        </select>
+      </div>
+      <button class="btn btn-scout" style="width: 100%;" id="btn-submit-scout">
+        🔭 Transmeto Njoftimin e Informatorit
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: Bisedat e Grupeve (Group Chats) -->
+  <div class="modal-overlay" id="modal-chat">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>💬 Bisedat e Grupeve</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+
+      <!-- Pamja e Listës së Bisedave -->
+      <div id="chat-list-view">
+        <div id="chat-list" style="margin-bottom:12px;max-height:200px;overflow-y:auto;"></div>
+
+        <div style="font-weight:700;font-size:0.85rem;margin-bottom:6px;color:#4cc9f0;">🔗 Bashkohu në një Bisedë Grupi</div>
+        <div class="form-group" style="display:flex;gap:8px;">
+          <input type="text" id="chat-join-id" class="form-control" placeholder="ID e Bisedës" style="flex:2;">
+          <input type="password" id="chat-join-pass" class="form-control" placeholder="Kodi" style="flex:1;">
+        </div>
+        <button class="btn btn-role" style="width:100%;" id="btn-join-chat">🔗 Bashkohu në Bisedë</button>
+
+        <!-- Krijo Bisedë (vetëm për Organizatorët e Autorizuar) -->
+        <div id="chat-create-section" style="display:none;margin-top:14px;border-top:1px solid var(--card-border);padding-top:12px;">
+          <div style="font-weight:700;font-size:0.85rem;margin-bottom:6px;color:#06d6a0;">📢 Krijo Bisedën Tënde (Organizator)</div>
+          <div class="form-group">
+            <input type="text" id="chat-create-name" class="form-control" placeholder="Emri i Bisedës (p.sh. Salla e Koordinimit)">
+          </div>
+          <div class="form-group">
+            <input type="password" id="chat-create-pass" class="form-control" placeholder="Kodi i hyrjes (opsional)">
+          </div>
+          <button class="btn btn-organizer" style="width:100%;" id="btn-create-chat">📢 Krijo Bisedën</button>
+        </div>
+      </div>
+
+      <!-- Pamja e Bisedës Aktive -->
+      <div id="chat-room-view" style="display:none;flex:1;flex-direction:column;min-height:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <button id="btn-chat-back" style="background:#2e3540;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">← Kthehu</button>
+          <button id="btn-chat-leave" style="background:#e63946;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:0.8rem;">Largohu</button>
+        </div>
+        <div id="chat-room-title" style="font-weight:700;font-size:1rem;margin-bottom:2px;"></div>
+        <div id="chat-room-subtitle" style="font-size:0.75rem;color:var(--text-muted);margin-bottom:6px;"></div>
+        <div id="chat-members" class="chat-members-list"></div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-composer">
+          <input type="text" id="chat-message-input" class="form-control" placeholder="Shkruaj mesazhin..." maxlength="500">
+          <button class="btn btn-chat" id="btn-send-chat" style="flex:none;padding:0 16px;">Dërgo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Paneli i Administratorit (Admin Command Center) -->
+  <div class="modal-overlay" id="modal-admin">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-title">
+        <span>👑 Paneli i Kontrollit Qendror (Admin Center)</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      
+      <!-- Admin Login View -->
+      <div id="admin-login-view">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px;">
+          Futni çelësin sekret të administratorit për të marrë kontrollin e plotë mbi protestën:
+        </p>
+        <div class="form-group">
+          <input type="password" id="admin-key-input" class="form-control" placeholder="Çelësi Kryesor Sekret">
+        </div>
+        <button class="btn btn-role" style="width:100%;" id="btn-submit-admin-auth">Hyr si Administrator</button>
+      </div>
+
+      <!-- Admin Dashboard View -->
+      <div id="admin-dashboard-view" style="display:none;">
+        <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;margin-bottom:14px;" id="admin-stats-grid">
+          <div style="background:#14171d;padding:8px 4px;border-radius:8px;text-align:center;">
+            <div style="font-size:1.05rem;font-weight:700;color:#06d6a0;" id="stat-users">0</div>
+            <div style="font-size:0.65rem;color:var(--text-muted);">Përdorues</div>
+          </div>
+          <div style="background:#14171d;padding:8px 4px;border-radius:8px;text-align:center;">
+            <div style="font-size:1.05rem;font-weight:700;color:#e63946;" id="stat-frontline">0</div>
+            <div style="font-size:0.65rem;color:var(--text-muted);">Fronti 1</div>
+          </div>
+          <div style="background:#14171d;padding:8px 4px;border-radius:8px;text-align:center;">
+            <div style="font-size:1.05rem;font-weight:700;color:#ffb703;" id="stat-scouts">0</div>
+            <div style="font-size:0.65rem;color:#ffb703;font-weight:700;">Informatorë</div>
+          </div>
+          <div style="background:#14171d;padding:8px 4px;border-radius:8px;text-align:center;">
+            <div style="font-size:1.05rem;font-weight:700;color:#ff4d6d;" id="stat-minors">0</div>
+            <div style="font-size:0.65rem;color:#ff4d6d;font-weight:700;">Të Rinj</div>
+          </div>
+          <div style="background:#14171d;padding:8px 4px;border-radius:8px;text-align:center;">
+            <div style="font-size:1.05rem;font-weight:700;color:#f77f00;" id="stat-pins">0</div>
+            <div style="font-size:0.65rem;color:var(--text-muted);">Rreziqe</div>
+          </div>
+        </div>
+
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:#ffb703;">🔭 Buletinet e Informatorëve (Lëvizje & Rrethime)</div>
+        <div id="admin-intel-list" style="max-height:110px;overflow-y:auto;background:#14171d;padding:8px;border-radius:8px;margin-bottom:12px;font-size:0.8rem;">
+          Nuk ka buletine aktive.
+        </div>
+
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:#4cc9f0;">📢 Udhëzimet e Organizatorëve (Menaxhim & Spastrim)</div>
+        <div id="admin-directives-list" style="max-height:110px;overflow-y:auto;background:#14171d;padding:8px;border-radius:8px;margin-bottom:12px;font-size:0.8rem;">
+          Nuk ka udhëzime aktive.
+        </div>
+
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:#e63946;">🚨 Alarmet SOS Aktive</div>
+        <div id="admin-sos-list" style="max-height:110px;overflow-y:auto;background:#14171d;padding:8px;border-radius:8px;margin-bottom:12px;font-size:0.8rem;">
+          Nuk ka alarme aktive.
+        </div>
+
+        <div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:#ffb703;">⚠️ Pikat e Raportuara (Fshi raportet sabotuese)</div>
+        <div id="admin-pins-list" style="max-height:110px;overflow-y:auto;background:#14171d;padding:8px;border-radius:8px;margin-bottom:12px;font-size:0.8rem;">
+          Nuk ka pika rreziku.
+        </div>
+
+        <button class="btn btn-buddy" style="width:100%;margin-top:6px;" id="btn-refresh-admin">Rifresko të Dhënat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Kutia e Njoftimeve (Notification Center Drawer/Inbox) -->
+  <div class="modal-overlay" id="modal-inbox">
+    <div class="modal-content" style="max-width: 520px; display:flex; flex-direction:column; max-height: 80vh;">
+      <div class="modal-title">
+        <span>🔔 Kutia e Njoftimeve & Alarmeve</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:10px;">
+        Këtu ruhen të gjitha njoftimet e vëzhguesve, udhëzimet e organizatorëve dhe alarmet pa bllokuar shikimin e hartës.
+      </p>
+      <div id="inbox-list" style="flex:1;overflow-y:auto;min-height:220px;max-height:50vh;">
+        <div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:24px;">Nuk ka njoftime të reja për momentin.</div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <button class="btn btn-buddy" style="flex:1;" id="btn-clear-inbox">Pastro Historikun</button>
+        <button class="btn" style="background:#2e3540;color:#fff;padding:10px 16px;" onclick="closeModals()">Mbyll</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-app Toast (replaces native alert/confirm/prompt dialogs) -->
+  <div id="app-toast" class="app-toast" role="status" aria-live="polite"></div>
+
+  <!-- MODAL: SOS Confirmation (in-app, mobile friendly) -->
+  <div class="modal-overlay" id="modal-sos">
+    <div class="modal-content">
+      <div class="modal-title">
+        <span>🚨 KONFIRMIMI I ALARMIT</span>
+        <button class="close-btn" onclick="closeModals()">&times;</button>
+      </div>
+      <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:8px;">
+        A po ndaloheni me forcë apo keni emergjencë kritike? Kjo do të alarmojë menjëherë qelizën e shokëve, mjekët/juristët dhe familjen tuaj!
+      </p>
+      <label class="form-label" for="sos-note-input">Përshkrim i shkurtër (1 fjalë):</label>
+      <input type="text" id="sos-note-input" class="sos-note-input" placeholder="p.sh. Polici Civile, Rrethim, Gaz Lotsjellës" maxlength="60">
+      <div class="sos-actions">
+        <button class="btn btn-sos" id="btn-send-sos" style="animation:none;">🚨 DËRGO ALARMIN</button>
+        <button class="btn" onclick="closeModals()" style="background:#2e3540;color:#fff;">Anulo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Mirëseardhja & Regjistrimi i Shpejtë (Onboarding) -->
+  <div class="modal-overlay" id="modal-onboarding">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-title">
+        <span>🛡️ Hyrja në ProtestGuard</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+        Mirë se vini në rrjetin e sigurisë dhe koordinimit qytetar. Nuk kërkohet asnjë e dhënë personale (Zero-PII).
+      </p>
+      <div class="form-group">
+        <label class="form-label">Pseudonimi / Si të të njohin shokët?</label>
+        <input type="text" id="onboarding-nickname" class="form-control" placeholder="p.sh. Joni, Bora, Shoku..." maxlength="24">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Zgjidhni Rolin në Terren</label>
+        <select id="onboarding-role" class="form-control">
+          <option value="civilian">📣 Protestues / Qytetar</option>
+          <option value="frontline">🛡️ Fronti i Parë (Mburojë)</option>
+          <option value="scout">🔭 Informator / Vëzhgues (Scout)</option>
+          <option value="medic">🩺 Mjek / Ndihmë e Shpejtë</option>
+          <option value="legal">⚖️ Jurist / Monitorues Ligjor</option>
+          <option value="logistics">🎒 Ndihmë Logjistike (Ujë/Maska)</option>
+          <option value="organizer">📢 Organizator (Kërkon Kod)</option>
+        </select>
+      </div>
+      <div class="form-group" id="onboarding-org-group" style="display:none;">
+        <label class="form-label" style="color:#4cc9f0;">Kodi i Sigurisë së Organizatorit</label>
+        <input type="password" id="onboarding-org-code" class="form-control" placeholder="Kodi i autorizimit (LIRI2026)">
+        <span style="font-size:0.72rem;color:var(--text-muted);display:block;margin-top:3px;">
+          *Kodi i autorizimit: <strong>LIRI2026</strong>
+        </span>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;background:#14171d;padding:10px;border-radius:10px;border:1px solid #e63946;">
+        <input type="checkbox" id="onboarding-minor" style="width:20px;height:20px;">
+        <label for="onboarding-minor" style="font-size:0.82rem;cursor:pointer;">
+          <strong style="color:#ff4d6d;">⚠️ Nën 18 vjeç / I Ri në Front</strong><br>
+          <span style="color:var(--text-muted);font-size:0.72rem;">Aktivizon vëmendje dhe mbrojtje prioritare nga mjekët dhe juristët.</span>
+        </label>
+      </div>
+      <button class="btn btn-role" style="width:100%;margin-top:10px;" id="btn-submit-onboarding">
+        🛡️ Fillo Navigimin në Terren
+      </button>
+    </div>
+  </div>
+
+  <!-- Datalist për Sugjerimin Automatik të Rrugëve të Tiranës -->
+  <datalist id="tirana-streets-list">
+    <option value="Bulevardi Dëshmorët e Kombit">
+    <option value="Bulevardi Bajram Curri (Lana)">
+    <option value="Bulevardi Gjergj Fishta (Lana)">
+    <option value="Bulevardi Zogu I">
+    <option value="Sheshi Skënderbej">
+    <option value="Sheshi Nënë Tereza">
+    <option value="Rruga Ibrahim Rugova (Bllok)">
+    <option value="Rruga Ismail Qemali (Bllok)">
+    <option value="Rruga Sami Frashëri">
+    <option value="Rruga Myslym Shyri">
+    <option value="Rruga e Durrësit">
+    <option value="Rruga e Kavajës">
+    <option value="Rruga e Elbasanit">
+    <option value="Rruga George W. Bush (Parlamenti)">
+    <option value="Rruga Mustafa Matohiti">
+    <option value="Rruga Papa Gjon Pali II (RTSH)">
+    <option value="Rruga Abdi Toptani (Toptani)">
+    <option value="Rruga 28 Nëntori">
+    <option value="Ura e Lanës (Tajvani)">
+    <option value="Ura e Bllokut">
+    <option value="Parku Rinia (Tajvani)">
+    <option value="Piramida e Tiranës">
+    <option value="Kryeministria">
+    <option value="Parlamenti i Shqipërisë">
+    <option value="Drejtoria e Policisë (Sami Frashëri)">
+    <option value="Komisariati Nr. 1 (Ali Demi)">
+    <option value="Komisariati Nr. 2 (21 Dhjetori)">
+  </datalist>
+
+  <!-- Scripts (100% Self-hosted Open-Source, No External CDNs) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

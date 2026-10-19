@@ -1,0 +1,25 @@
+{
+  "name": "protestguard-albania",
+  "version": "1.0.0",
+  "description": "ProtestGuard Albania - Live Civil Safety, Tactical Mesh & Mutual Aid Platform",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "leaflet": "^1.9.4",
+    "socket.io": "^4.8.1"
+  },
+  "keywords": [
+    "protest",
+    "safety",
+    "civil-defense",
+    "realtime-map",
+    "sos"
+  ],
+  "author": "ProtestGuard Team",
+  "license": "MIT"
+}
